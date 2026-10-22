@@ -1,0 +1,90 @@
+{
+"schema_version": "1.1",
+"event_id": "9f225860-42f2-4cd0-8c3a-e4e970395307",
+"device_id": "bf8d0f7d-f739-4529-9a8a-5975f5b26960",
+"boot_id": "b503cb0b-3866-491b-aebc-e164ea73d9aa",
+"sequence": 1843,
+"captured_at": "2026-10-11T15:24:12.000Z",
+"monotonic_ms": 929450,
+"clock_quality": "synced",
+"mission_id": "0354909f-cc35-4ebc-822d-bfffeaa80374",
+"map_version_id": "ecb3df81-477f-4e72-92c6-8b38f856cdb5",
+"pose": {
+"x_m": 2.15,
+"y_m": 1.40,
+"theta_rad": 0.28,
+"sigma_position_m": 0.08,
+"quality": "estimated"
+},
+"readings": [
+{
+"channel_key": "mq6_raw",
+"value": 1860,
+"quality": "uncalibrated",
+"calibration_id": null
+},
+{
+"channel_key": "mq4_raw",
+"value": 1420,
+"quality": "uncalibrated",
+"calibration_id": null
+},
+{
+"channel_key": "mq7_raw",
+"value": null,
+"quality": "not_installed",
+"calibration_id": null
+},
+{
+"channel_key": "temperature",
+"value": 24.6,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "humidity",
+"value": 48.1,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "front_distance_m",
+"value": 0.45,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "ir_floor_front_left",
+"boolean_value": true,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "ir_floor_front_right",
+"boolean_value": true,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "ir_floor_rear_left",
+"boolean_value": true,
+"quality": "valid",
+"calibration_id": null
+},
+{
+"channel_key": "ir_floor_rear_right",
+"boolean_value": true,
+"quality": "valid",
+"calibration_id": null
+}
+],
+"battery": {
+"voltage_v": 11.4,
+"soc_pct": null,
+"current_a": null,
+"quality": "voltage_only"
+},
+"robot_state": "moving",
+"motors_active": true,
+"firmware_version": "0.2.0"
+}
