@@ -719,6 +719,116 @@ grant select on public.v_readings_interpreted, public.v_latest_readings,
                 public.v_robot_status, public.v_active_alerts to authenticated;
 
 -- =====================================================================
+-- PAQUETE EN VIVO (una sola llamada para Web y Movil)
+-- Una fila por robot con TODO lo del ultimo frame ya interpretado:
+-- conexion, pose 2D, bateria, estado, los 12 sensores y las alertas vivas.
+-- Uso: supabase.from('v_robot_telemetry_live').select('*').eq('robot_id', id).single()
+-- No reemplaza a las otras vistas: el historial sigue en v_readings_interpreted.
+-- =====================================================================
+create or replace view public.v_robot_telemetry_live
+with (security_invoker = true) as
+select
+    s.robot_id,
+    s.public_code,
+    s.home_id,
+    s.frame_id,
+    f.stream_version,
+    s.captured_at,
+    s.received_at,
+    s.seconds_since_last,
+    s.connection,
+    s.firmware_version,
+    case when fp.frame_id is null then null else jsonb_build_object(
+        'map_version_id',    fp.map_version_id,
+        'x_m',               fp.x_m,
+        'y_m',               fp.y_m,
+        'theta_rad',         fp.theta_rad,
+        'sigma_position_m',  fp.sigma_position_m,
+        'sigma_heading_rad', fp.sigma_heading_rad,
+        'quality',           fp.quality
+    ) end                                         as pose,
+    case when br.frame_id is null then null else jsonb_build_object(
+        'voltage_v',   br.voltage_v,
+        'current_a',   br.current_a,
+        'soc_pct',     br.soc_pct,
+        'method_code', br.method_code,
+        'quality',     br.quality
+    ) end                                         as battery,
+    case when rs.frame_id is null then null else jsonb_build_object(
+        'reported',      rs.reported_state,
+        'navigation',    rs.navigation_state,
+        'motors_active', rs.motors_active,
+        'wifi_rssi_dbm', rs.wifi_rssi_dbm
+    ) end                                         as state,
+    s.open_alerts,
+    s.worst_severity,
+    coalesce(rd.readings, '[]'::jsonb)            as readings,
+    coalesce(al.active_alerts, '[]'::jsonb)       as active_alerts
+from public.v_robot_status s
+left join public.telemetry_frames f   on f.id = s.frame_id
+left join public.frame_poses fp       on fp.frame_id = s.frame_id
+left join public.battery_readings br  on br.frame_id = s.frame_id
+left join public.robot_states rs      on rs.frame_id = s.frame_id
+left join lateral (
+    select jsonb_agg(jsonb_build_object(
+               'channel_key',        v.channel_key,
+               'metric_type',        v.metric_type,
+               'raw_value',          v.raw_value,
+               'boolean_value',      v.boolean_value,
+               'raw_quality',        v.raw_quality,
+               'display_value',      v.display_value,
+               'display_unit',       v.display_unit,
+               'signal_pct',         v.signal_pct,
+               'level',              v.level,
+               'confidence',         v.confidence,
+               'calibration_status', v.calibration_status,
+               'gas_label',          v.gas_label
+           ) order by v.channel_key)              as readings
+    from public.v_readings_interpreted v
+    where v.frame_id = s.frame_id
+) rd on true
+left join lateral (
+    select jsonb_agg(jsonb_build_object(
+               'id',           a.id,
+               'type',         a.type,
+               'severity',     a.severity,
+               'state',        a.state,
+               'origin',       a.origin,
+               'opened_at',    a.opened_at,
+               'last_seen_at', a.last_seen_at,
+               'details',      a.details
+           ) order by a.opened_at desc)           as active_alerts
+    from public.alerts a
+    where a.robot_id = s.robot_id and a.state in ('open', 'acknowledged')
+) al on true;
+
+comment on view public.v_robot_telemetry_live is
+'Paquete en vivo por robot (1 llamada). readings = 12 canales interpretados; active_alerts = alertas open/acknowledged.';
+
+grant select on public.v_robot_telemetry_live to authenticated;
+
+-- =====================================================================
+-- TIEMPO REAL (WebSocket de Supabase Realtime)
+-- Avisa a Web/Movil cuando entra un frame nuevo o cambia una alerta.
+-- Realtime respeta RLS: cada usuario solo recibe eventos de su domicilio.
+-- Es seguro correrlo varias veces; si la publicacion no existe (Postgres
+-- fuera de Supabase) simplemente no hace nada.
+-- =====================================================================
+do $$
+declare t text;
+begin
+    if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+        foreach t in array array['telemetry_frames', 'alerts'] loop
+            if not exists (select 1 from pg_publication_tables
+                           where pubname = 'supabase_realtime'
+                             and schemaname = 'public' and tablename = t) then
+                execute format('alter publication supabase_realtime add table public.%I', t);
+            end if;
+        end loop;
+    end if;
+end $$;
+
+-- =====================================================================
 -- CENTINELA - 05_rls.sql
 -- Seguridad: lectura solo para miembros activos del domicilio.
 -- Escritura de telemetria: SOLO via ingest_telemetry (service_role).
